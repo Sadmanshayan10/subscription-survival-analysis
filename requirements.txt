@@ -1,0 +1,13 @@
+# Python dependencies for the SQL / data-loading layer.
+# The survival modelling itself lives in R/ (see README).
+#
+# Install:  python3 -m venv .venv && source .venv/bin/activate
+#           pip install -r requirements.txt
+
+duckdb==1.5.5
+pandas==3.0.5
+pyarrow==25.0.1
+kaggle==2.2.4
+
+# Nested-archive extraction: the Kaggle competition ships CSVs as .7z files
+py7zr==1.1.3

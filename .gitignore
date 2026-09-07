@@ -1,0 +1,25 @@
+# Python environment
+.venv/
+__pycache__/
+*.pyc
+
+# Data (never commit raw or processed data)
+data/raw/
+data/processed/
+*.duckdb
+*.csv
+*.parquet
+*.7z
+*.zip
+
+# Credentials
+kaggle.json
+.kaggle/
+
+# R
+.Rhistory
+.Rproj.user/
+.RData
+
+# macOS
+.DS_Store
