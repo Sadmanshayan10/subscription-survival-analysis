@@ -1,0 +1,164 @@
+--------------------------------------------------------------------------
+(c) COX PROPORTIONAL HAZARDS MODEL
+--------------------------------------------------------------------------
+n = 915,067 spells, 506,943 events, 44.60% right-censored
+Reference levels: auto-renew Yes, payment method PM41,
+plan length 8-31 days, city1, registration channel via7.
+
+  term                                     HR     lo95     hi95   p
+  Reg channel: via4                     4.945    4.578    5.342   < 2.2e-16
+  Plan length: 1-7 days                 4.883    4.769    5.000   < 2.2e-16
+  Reg channel: via3                     4.323    4.001    4.671   < 2.2e-16
+  Reg channel: via9                     3.391    3.140    3.662   < 2.2e-16
+  Auto-renew: No                        1.584    1.556    1.612   < 2.2e-16
+  Reg channel: Other                    1.492    1.346    1.653   2.39e-14
+  Payment method: PM35                  1.346    1.236    1.466   9.28e-12
+  Plan length: 0 days                   1.313    1.283    1.344   < 2.2e-16
+  Payment method: Other                 0.745    0.689    0.805   1.33e-13
+  Payment method: PM38                  0.684    0.632    0.741   < 2.2e-16
+  City: city5                           0.603    0.596    0.611   < 2.2e-16
+  Payment method: PM32                  0.601    0.553    0.654   < 2.2e-16
+  City: city22                          0.592    0.583    0.601   < 2.2e-16
+  City: Other                           0.585    0.579    0.590   < 2.2e-16
+  City: city4                           0.582    0.574    0.590   < 2.2e-16
+  Payment method: PM40                  0.563    0.520    0.609   < 2.2e-16
+  Plan length: 32-100 days              0.497    0.484    0.511   < 2.2e-16
+  City: city13                          0.477    0.471    0.484   < 2.2e-16
+  Plan length: 101-200 days             0.457    0.446    0.467   < 2.2e-16
+  Payment method: PM36                  0.444    0.410    0.480   < 2.2e-16
+  Plan length: 200+ days                0.211    0.205    0.218   < 2.2e-16
+
+Concordance (C-index): 0.8199 (se 0.0003)
+Likelihood ratio test: 777388 on 21 df, p < 2.2e-16
+
+Strongest effects (largest and smallest HR):
+  Reg channel: via4                  HR = 4.945  (95% CI 4.578-5.342)
+  Plan length: 1-7 days              HR = 4.883  (95% CI 4.769-5.000)
+  Reg channel: via3                  HR = 4.323  (95% CI 4.001-4.671)
+  Payment method: PM36               HR = 0.444  (95% CI 0.410-0.480)
+  Plan length: 200+ days             HR = 0.211  (95% CI 0.205-0.218)
+
+--------------------------------------------------------------------------
+(d) PROPORTIONAL HAZARDS ASSUMPTION -- cox.zph / Schoenfeld residuals
+--------------------------------------------------------------------------
+                    chisq df p
+auto_renew       4465.870  1 0
+payment_method  89277.680  6 0
+plan_length     96766.314  5 0
+city_grp         8461.197  5 0
+reg_channel     12159.113  4 0
+GLOBAL         117885.622 21 0
+
+GLOBAL test: chi-sq = 117886 on 21 df, p < 2.2e-16
+
+PH ASSUMPTION IS VIOLATED. Covariates failing the test (p < 0.05):
+  auto_renew         chi-sq =       4466 on 1 df, p < 2.2e-16
+  payment_method     chi-sq =      89278 on 6 df, p < 2.2e-16
+  plan_length        chi-sq =      96766 on 5 df, p < 2.2e-16
+  city_grp           chi-sq =       8461 on 5 df, p < 2.2e-16
+  reg_channel        chi-sq =      12159 on 4 df, p < 2.2e-16
+
+Caveat on interpretation: with n = 915,067 the test is enormously
+powered, so any trivial deviation reaches significance. The remedy
+below is therefore judged on EFFECT SIZE -- whether the hazard ratio
+actually changes materially over follow-up -- not on the p-value.
+
+--------------------------------------------------------------------------
+REMEDIATED MODEL (stratification + time-varying coefficients)
+--------------------------------------------------------------------------
+Strategy:
+  * plan_length and payment_method are the largest PH violations and
+    are nuisance/design variables rather than the effects of interest,
+    so they go into strata(): each gets its own baseline hazard shape
+    and no proportionality is imposed on them.
+  * auto_renew, city_grp and reg_channel get TIME-VARYING coefficients:
+    follow-up is split at 30 and 180 days and each covariate is
+    interacted with the resulting period, so its HR may differ by period.
+  * Idiom is Therneau's `x:strata(tgroup)` on survSplit output, which
+    avoids the non-estimable period main effect (within a risk set at
+    time t, every subject is in the same period).
+
+survSplit: 915,067 spells -> 1,858,506 person-period rows at cuts 30, 180
+
+Stratified model with proportionality still imposed (reference point):
+  term                                 HR     lo95     hi95
+  Auto-renew: No                    1.917    1.881    1.953
+  City: city5                       0.707    0.699    0.716
+  City: city13                      0.596    0.587    0.604
+  City: city4                       0.691    0.681    0.701
+  City: city22                      0.712    0.701    0.723
+  City: Other                       0.702    0.695    0.708
+  Reg channel: via4                 2.077    1.831    2.356
+  Reg channel: via9                 1.551    1.367    1.759
+  Reg channel: via3                 1.741    1.535    1.976
+  Reg channel: Other                0.836    0.724    0.965
+
+Time-varying hazard ratios (baseline stratified by plan length x payment method):
+  covariate                    period          HR     lo95     hi95   p
+  Auto-renew: No               d1-30        3.092    2.984    3.204   < 2.2e-16
+  Auto-renew: No               d31-180      1.762    1.715    1.810   < 2.2e-16
+  Auto-renew: No               d181+        1.084    1.030    1.141   2.16e-03
+  City: city5                  d1-30        0.682    0.671    0.694   < 2.2e-16
+  City: city5                  d31-180      0.728    0.711    0.745   < 2.2e-16
+  City: city5                  d181+        0.948    0.921    0.975   2.45e-04
+  City: city13                 d1-30        0.494    0.482    0.506   < 2.2e-16
+  City: city13                 d31-180      0.633    0.618    0.648   < 2.2e-16
+  City: city13                 d181+        0.862    0.839    0.887   < 2.2e-16
+  City: city4                  d1-30        0.649    0.636    0.663   < 2.2e-16
+  City: city4                  d31-180      0.730    0.711    0.750   < 2.2e-16
+  City: city4                  d181+        0.936    0.907    0.967   6.16e-05
+  City: city22                 d1-30        0.651    0.636    0.665   < 2.2e-16
+  City: city22                 d31-180      0.762    0.742    0.784   < 2.2e-16
+  City: city22                 d181+        1.006    0.972    1.041   7.36e-01
+  City: Other                  d1-30        0.629    0.621    0.638   < 2.2e-16
+  City: Other                  d31-180      0.754    0.741    0.767   < 2.2e-16
+  City: Other                  d181+        1.005    0.982    1.028   6.68e-01
+  Reg channel: via4            d1-30        1.861    1.477    2.344   1.35e-07
+  Reg channel: via4            d31-180      1.667    1.363    2.040   6.88e-07
+  Reg channel: via4            d181+        1.466    1.166    1.844   1.06e-03
+  Reg channel: via9            d1-30        1.097    0.871    1.382   4.30e-01
+  Reg channel: via9            d31-180      1.750    1.431    2.140   5.03e-08
+  Reg channel: via9            d181+        1.937    1.542    2.433   1.32e-08
+  Reg channel: via3            d1-30        1.385    1.100    1.745   5.68e-03
+  Reg channel: via3            d31-180      1.747    1.427    2.138   6.20e-08
+  Reg channel: via3            d181+        2.137    1.700    2.686   7.70e-11
+  Reg channel: Other           d1-30        1.373    1.071    1.760   1.23e-02
+  Reg channel: Other           d31-180      0.532    0.423    0.668   5.86e-08
+  Reg channel: Other           d181+        0.292    0.127    0.673   3.82e-03
+
+--------------------------------------------------------------------------
+IS THE VIOLATION MATERIAL, OR JUST SIGNIFICANT?
+--------------------------------------------------------------------------
+For each covariate, the ratio of its largest to its smallest
+period-specific HR. A ratio near 1 means proportionality was a
+harmless approximation despite the tiny p-value; a large ratio means
+the single-number HR genuinely misrepresents the effect.
+
+  covariate                     HR d1-30   d31-180     d181+   max/min
+  Auto-renew: No                   3.092     1.762     1.084      2.85
+  City: city5                      0.682     0.728     0.948      1.39
+  City: city13                     0.494     0.633     0.862      1.75
+  City: city4                      0.649     0.730     0.936      1.44
+  City: city22                     0.651     0.762     1.006      1.55
+  City: Other                      0.629     0.754     1.005      1.60
+  Reg channel: via4                1.861     1.667     1.466      1.27
+  Reg channel: via9                1.097     1.750     1.937      1.77
+  Reg channel: via3                1.385     1.747     2.137      1.54
+  Reg channel: Other               1.373     0.532     0.292      4.70
+
+Headline -- hazard ratio for auto-renew OFF (vs ON):
+  unstratified Cox, proportional : HR = 1.584
+  stratified Cox, proportional   : HR = 1.917
+  stratified, period d1-30    : HR = 3.092 (95% CI 2.984-3.204)
+  stratified, period d31-180  : HR = 1.762 (95% CI 1.715-1.810)
+  stratified, period d181+    : HR = 1.084 (95% CI 1.030-1.141)
+  -> the effect decays by a factor of 2.9 across follow-up, so a
+     single constant HR is not an adequate summary.
+
+Concordance: unstratified 0.8199, remediated 0.5425.
+These are NOT comparable: concordance in a stratified model is
+computed only within strata, so the plan-length and payment-method
+information -- which carries most of the discrimination -- is removed
+from the score by construction rather than lost by a worse model.
+
+--------------------------------------------------------------------------

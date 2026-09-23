@@ -12,6 +12,18 @@ data/processed/
 *.7z
 *.zip
 
+# ...but DO commit the analysis outputs, so the README renders and the
+# numbers in it are reproducible from the artefacts. These negations come
+# after the broad *.csv rule above, which they override.
+!results/
+!results/*.png
+!results/*.txt
+!results/*.csv
+
+# Fitted-model dumps are large binaries; the CSV coefficient tables are the
+# committed form of the same information.
+results/*.rds
+
 # Credentials
 kaggle.json
 .kaggle/

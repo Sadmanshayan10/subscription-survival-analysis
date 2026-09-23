@@ -1,0 +1,98 @@
+======================================================================
+CENSORING SANITY CHECK
+======================================================================
+----------------------------------------------------------------------
+Observation window
+----------------------------------------------------------------------
+  window start (first transaction_date in data) : 2015-01-01
+  observation cutoff (last transaction_date)    : 2017-03-31
+  churn grace period                            : 30 days
+  expiry dates at/after this treated as junk    : 2019-01-01
+----------------------------------------------------------------------
+Data funnel
+----------------------------------------------------------------------
+  transactions (raw, v1 + v2)                   :   22,978,755
+  after de-duplicating v1/v2 overlap            :   22,975,416
+  after dropping unparseable/out-of-range dates :   22,955,981  (19,435 dropped)
+  users with >=1 clean transaction              :    2,425,705
+  ... with a members row (covariates available) :    1,988,086
+  excluded - no registration date                         :            0
+  excluded - registered before 2015-01-01 (left-truncated):    1,070,383
+  excluded - registered after first transaction           :           70
+  excluded - negative duration                            :        6,609
+  excluded - zero duration                                :        7,618
+  excluded - spell_end after cutoff                       :            0
+  MODELLING COHORT                              :      915,067
+----------------------------------------------------------------------
+Implausible-row checks (on the modelling cohort)
+----------------------------------------------------------------------
+  OK    negative durations                           :            0
+  OK    zero durations                               :            0
+  OK    spells ending after the cutoff               :            0
+  OK    start after end                              :            0
+  OK    start before window                          :            0
+  OK    event not 0/1                                :            0
+  OK    churn recorded after cutoff                  :            0
+----------------------------------------------------------------------
+Events vs censoring (modelling cohort)
+----------------------------------------------------------------------
+  total spells                 :      915,067
+  events (churned, event = 1)  :      506,943  (55.40%)
+  censored (active, event = 0) :      408,124  (44.60%)
+  CENSORING RATE               :       44.60%
+
+  Censoring reason breakdown:
+    still paid up past cutoff                     388,101
+    grace window unfinished at cutoff              20,023
+----------------------------------------------------------------------
+Duration distribution (days, modelling cohort)
+----------------------------------------------------------------------
+  min             1.0
+  max           820.0
+  mean          188.5
+  median         92.0
+  p25            14.0
+  p75           336.0
+  p90           524.0
+  p99           752.0
+
+  By outcome:
+    group                 n    median      mean     max
+    censored        408,124     310.0     325.9     820
+    churned         506,943      30.0      77.9     782
+
+  Histogram (days):
+       0-30     332,969  36.4%  #####################
+      30-60      69,883   7.6%  ####
+      60-90      51,847   5.7%  ###
+      90-180     99,027  10.8%  ######
+     180-365    149,743  16.4%  #########
+     365-547    137,626  15.0%  #########
+     547+        73,972   8.1%  ####
+----------------------------------------------------------------------
+Key covariate distributions (modelling cohort)
+----------------------------------------------------------------------
+  auto-renew at spell start:
+    is_auto_renew = 0:    485,551  (53.06%)
+    is_auto_renew = 1:    429,516  (46.94%)
+  top payment methods:
+    method  41:    352,569  (38.53%)  churn  29.3%
+    method  35:    216,807  (23.69%)  churn  97.8%
+    method  38:    158,572  (17.33%)  churn  67.5%
+    method  36:     50,860  ( 5.56%)  churn  49.7%
+    method  32:     28,309  ( 3.09%)  churn  25.1%
+    method  40:     23,495  ( 2.57%)  churn  42.2%
+    method  29:     18,274  ( 2.00%)  churn  42.8%
+    method  39:     12,689  ( 1.39%)  churn  79.5%
+  top plan lengths (days):
+    plan   30d:    589,297  (64.40%)  churn  40.8%
+    plan    7d:    224,692  (24.55%)  churn  97.7%
+    plan  410d:     22,788  ( 2.49%)  churn  21.0%
+    plan  195d:     16,772  ( 1.83%)  churn  44.7%
+    plan   31d:     10,717  ( 1.17%)  churn  70.2%
+    plan    0d:     10,428  ( 1.14%)  churn  73.0%
+    plan   10d:      7,564  ( 0.83%)  churn  95.7%
+    plan   90d:      7,404  ( 0.81%)  churn  22.7%
+----------------------------------------------------------------------
+VERDICT: PASS - no implausible rows in the modelling cohort.
+----------------------------------------------------------------------
