@@ -1,38 +1,91 @@
 # subscription-survival-analysis
 
-Modelling music-subscription churn as a **time-to-event** problem using the
-KKBox (WSDM Churn Prediction Challenge) dataset.
+How long does a music-streaming subscriber actually stay subscribed, and what
+makes them leave sooner? A time-to-event analysis of **915,067 KKBox
+subscriptions**, built in DuckDB and modelled in R with `survival` /
+`survminer`.
 
-**Headline:** across 915,067 first-subscription spells (44.6% right-censored at
-2017-03-31), median subscription lifetime is **196 days (95% CI 195-198)**.
-Turning auto-renew off multiplies the churn hazard by **3.09x in the first 30
-days**, decaying to 1.08x after six months. The proportional-hazards assumption
-**does not hold** and the model is remediated rather than reported as-is.
+## The data
 
-## Goal
+[KKBox](https://www.kkbox.com/) is a subscription music-streaming service
+operating across Taiwan, Hong Kong, Japan, Singapore and Malaysia. For the
+[WSDM Churn Prediction Challenge](https://www.kaggle.com/c/kkbox-churn-prediction-challenge)
+it released a transaction log running **2015-01-01 to 2017-03-31**: 22.9M
+subscription transactions over 2.4M users, plus a static member profile table
+(city, registration channel, registration date).
 
-Estimate how long a KKBox subscriber stays subscribed, and which factors make
-churn happen sooner or later. The outcome of interest is the *time from
-subscription start to churn*, not simply whether a user churned inside a fixed
-window.
+Subscriptions are prepaid: each transaction buys membership up to a
+`membership_expire_date`, for a plan of 7, 30, 410 or other fixed lengths,
+with auto-renew either on or off. Nothing here is a monthly rolling contract.
 
-## Why survival analysis and not binary classification
+The raw data is not redistributed in this repo — see [Reproducing](#6-reproducing).
+
+## Key findings
+
+| Finding | Number |
+|---|---|
+| Median subscription lifetime | **196 days** (95% CI 195-198) |
+| Auto-renew **off**, first 30 days | **3.09x** the churn hazard (95% CI 2.98-3.20) |
+| Auto-renew **off**, after day 180 | 1.08x — the effect is almost entirely a first-month story |
+| Longest-lived plan (200+ days) | **0.21x** the hazard of a monthly plan |
+| Shortest-lived product (payment method PM35, a 7-day trial) | median lifetime **7 days**, 97.8% churn |
+| Proportional-hazards assumption | **Violated for every covariate** — remediated, not ignored |
+| Right-censoring | **44.60%** of spells still active at the cutoff |
+
+The single most actionable result: **auto-renew is a first-month effect, not a
+durable one.** A subscriber who reaches six months churns at roughly the same
+rate whether auto-renew is on or off. Retention effort aimed at auto-renew
+belongs in the first 30 days.
+
+## What "churn" means here, and what a "spell" is
+
+These two definitions drive every number above, so they come before the
+methods rather than after.
+
+**Churn** follows the competition's own rule: *no renewal within 30 days of
+the membership expiry date.* A subscriber whose plan lapses but who renews on
+day 12 has not churned; one who renews on day 40 has.
+
+A **spell** is a maximal run of transactions in which every renewal lands
+inside that 30-day grace window. A longer gap ends the spell, and that gap is
+the churn event. Each user contributes their **first** spell only, so t = 0 is
+true subscription inception rather than an arbitrary mid-life snapshot.
+
+Each spell ends in exactly one of three ways:
+
+| Situation | Outcome |
+|---|---|
+| A later spell exists (they lapsed, then came back) | **event** — churned at the first spell's expiry |
+| No later spell, and expiry + 30 days is still before the cutoff | **event** — the full grace window elapsed with no renewal |
+| Otherwise | **right-censored** at whichever comes first, the expiry or the 2017-03-31 cutoff |
+
+That third row is the case a binary classifier cannot represent, and it is
+44.60% of the data. The rule cannot produce a spell ending after the cutoff,
+which is one of the sanity checks in
+[`results/01_censoring_report.txt`](results/01_censoring_report.txt).
+
+## Why time-to-event and not classification
 
 The obvious framing is "predict churn (yes/no) in month N". That throws away
 most of the information in the data:
 
-- **Right-censoring.** At the end of the observation window, many users are
-  still subscribed. Their true lifetime is unknown; we only know it is *at
-  least* as long as observed so far. A classifier has to either drop these
-  users or mislabel them as "not churned", both of which bias the result.
+- **Right-censoring.** At the cutoff, 408,124 subscribers were still active.
+  Their true lifetime is unknown — we only know it is *at least* as long as
+  observed. A classifier must either drop them or mislabel them as
+  "not churned". Both bias the result; a survival model uses them correctly
+  as "survived at least this long".
 - **Time is the thing we care about.** "Will they churn?" is less useful than
-  "when?". Survival analysis estimates the full survival curve S(t).
-- **The hazard is not constant.** Confirmed here: see the PH section below.
-- **Covariate effects are interpretable** as hazard ratios.
+  "when?". Survival analysis estimates the whole curve S(t), so a median
+  lifetime and a 6-month retention rate fall straight out of it.
+- **The hazard is not constant.** Confirmed here, emphatically — see
+  [the PH section](#4-the-proportional-hazards-assumption-violated).
+- **Covariate effects are interpretable** as hazard ratios rather than
+  feature importances.
 
-Section 5 below quantifies exactly how much this buys on this dataset. The
-honest answer is "less than the 44.6% censoring rate suggests, but growing
-with the horizon" -- see [Baseline comparison](#5-baseline-comparison-vs-logistic-regression).
+Section 5 quantifies what this actually buys on *this* dataset. The honest
+answer is "less than a 44.6% censoring rate suggests at a short horizon, and
+steadily more as the horizon lengthens" — see
+[Baseline comparison](#5-baseline-comparison-vs-logistic-regression).
 
 ---
 
@@ -287,32 +340,76 @@ Full output: [`results/04_baseline_comparison.txt`](results/04_baseline_comparis
 
 ## 6. Reproducing
 
-```bash
-# Python side: download -> DuckDB -> spells table -> spells.csv
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/download_data.py      # needs a Kaggle API token, see below
-python scripts/load_data.py          # -> data/processed/kkbox.duckdb
-python scripts/build_spells.py       # -> spells table + data/processed/spells.csv
-python scripts/check_censoring.py    # sanity report; exits non-zero if it fails
+Verified end to end on macOS (Darwin 25.5) with Python 3.11.9 and R 4.5.1.
 
-# R side
-Rscript -e 'install.packages(c("survival","survminer","ggplot2","broom"))'
-Rscript R/run_all.R                  # -> results/
-```
+### Versions
 
-Every script resolves its paths from its own file location, so all of them work
-from any working directory.
+| | Version | Notes |
+|---|---|---|
+| Python | 3.11.9 | exact pins in `requirements.txt` |
+| duckdb | 1.5.5 | |
+| pandas | 3.0.5 | |
+| pyarrow | 25.0.1 | |
+| kaggle | 2.2.4 | download client |
+| py7zr | 1.1.3 | the competition ships `.7z` archives |
+| R | 4.5.1 | |
+| survival | 3.8.3 | `coxph`, `survfit`, `cox.zph`, `survSplit` |
+| survminer | 0.5.2 | `ggsurvplot` |
+| ggplot2 | 4.0.0 | note: `geom_errorbarh` is deprecated in 4.0, hence `width=` |
+| broom | 1.0.12 | tidying model output |
 
-### Kaggle API token
+### 1. Kaggle API token (do this first)
 
 1. Kaggle -> **Account -> Settings -> API -> Create New Token** (`kaggle.json`).
-2. `mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json`
-3. Accept the competition rules, or the download 403s:
+2. Put it in place:
+   ```bash
+   mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/
+   chmod 600 ~/.kaggle/kaggle.json
+   ```
+3. **Accept the competition rules**, or the download 403s:
    <https://www.kaggle.com/c/kkbox-churn-prediction-challenge/rules>
 
-`kaggle.json` is gitignored and must never be committed. Neither the raw CSVs
-nor `kkbox.duckdb` are committed; `results/` is.
+`kaggle.json` is gitignored and must never be committed.
+
+### 2. Python: download, load, build spells
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+python scripts/download_data.py    # ~1.3 GB download, ~7 GB extracted
+python scripts/load_data.py        # -> data/processed/kkbox.duckdb (~2.1 GB)
+python scripts/build_spells.py     # -> spells table + data/processed/spells.csv
+python scripts/check_censoring.py  # sanity report; exits non-zero if it fails
+```
+
+Run these in order — each depends on the previous one. `check_censoring.py` is
+a gate, not decoration: it exits non-zero if any implausible row (negative or
+zero duration, a spell ending after the cutoff) survives into the modelling
+cohort, so a broken data layer stops the pipeline instead of quietly
+producing wrong survival curves.
+
+`download_data.py` also accepts `--with-user-logs`, which fetches the daily
+listening logs (~30 GB uncompressed). **This analysis does not use them** —
+skip the flag unless you are extending the work.
+
+### 3. R: the survival analysis
+
+```bash
+Rscript -e 'install.packages(c("survival","survminer","ggplot2","broom"), repos="https://cloud.r-project.org")'
+Rscript R/run_all.R                # -> results/
+```
+
+`run_all.R` runs `01_kaplan_meier.R`, `02_cox_ph.R` and `03_logistic_baseline.R`
+in order, each in its own process, and stops on the first failure. Any of the
+three can also be run on its own; each sources `R/00_setup.R` for paths and
+factor preparation.
+
+Every script — Python and R — resolves its paths from its own file location,
+so all of them work from any working directory.
+
+Neither the raw CSVs nor `kkbox.duckdb` are committed; `results/` is, so the
+figures and numbers below can be checked without re-running anything.
 
 ---
 
@@ -320,11 +417,18 @@ nor `kkbox.duckdb` are committed; `results/` is.
 
 Things that would change the numbers above, roughly in order of how much:
 
-1. **The cohort is new-2015+ registrants only.** Excluding the 1,070,383
-   left-truncated users is necessary for a correct time origin, but it means
-   these results describe *subscribers acquired during 2015-2017*, not KKBox's
-   whole base. Long-tenured pre-2015 subscribers are very likely more loyal, so
-   the 196-day median understates lifetime for the full population.
+1. **The cohort is accounts registered on or after 2015-01-01 only — the
+   single biggest caveat.** The transaction log begins 2015-01-01, so anyone
+   already subscribed on that date has an unobservable start and would be
+   left-truncated: their measured duration would start mid-life and be wrong.
+   Excluding them is necessary for a correct time origin, but it removes
+   **1,070,383 of 1,988,086 users (53.8%)**. These results therefore describe
+   *subscribers acquired during 2015-2017*, not KKBox's whole base. Long-
+   tenured pre-2015 subscribers are very likely more loyal, so the 196-day
+   median almost certainly understates lifetime for the full population. A
+   proper fix would use left-truncated `Surv(start, stop, event)` entry times
+   against a known registration date, which this dataset does not supply for
+   pre-2015 subscription starts.
 2. **First spell only.** Users who churn and later resubscribe contribute only
    their first spell. Win-back behaviour and repeat lifetimes are out of scope,
    and a user with three short spells is counted once.
